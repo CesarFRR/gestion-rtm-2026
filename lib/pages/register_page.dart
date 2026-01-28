@@ -18,9 +18,16 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controladores y estado
+  // Controladores
   final TextEditingController _placaController = TextEditingController();
-  final TextEditingController _empresaController = TextEditingController();
+
+  // Dropdown empresas
+  final List<String> _empresas = [
+    'Molinos Morichal',
+    'Distriofertas',
+    'La Buena Arepa',
+  ];
+  String? _empresaSeleccionada;
 
   String _tipoSeleccionado = 'Carro'; // Por defecto
 
@@ -33,7 +40,8 @@ class _RegisterPageState extends State<RegisterPage> {
   // Archivos de imagen (XFile soporta web y móvil)
   XFile? _fotoFrente;
   XFile? _fotoTrasera;
-  XFile? _fotoLateral;
+  XFile? _fotoLateralDerecho;
+  XFile? _fotoLateralIzquierdo;
 
   bool _isUploading = false;
   final ImagePicker _picker = ImagePicker();
@@ -44,7 +52,8 @@ class _RegisterPageState extends State<RegisterPage> {
       setState(() {
         if (section == 'frente') _fotoFrente = image;
         if (section == 'trasera') _fotoTrasera = image;
-        if (section == 'lateral') _fotoLateral = image;
+        if (section == 'lateral_derecho') _fotoLateralDerecho = image;
+        if (section == 'lateral_izquierdo') _fotoLateralIzquierdo = image;
       });
     }
   }
@@ -74,7 +83,6 @@ class _RegisterPageState extends State<RegisterPage> {
         'vehiculos/$fileName',
       );
 
-      // Metadata para el tipo de contenido (opcional pero recomendado)
       SettableMetadata metadata = SettableMetadata(contentType: file.mimeType);
 
       UploadTask task = ref.putData(fileBytes, metadata);
@@ -83,16 +91,18 @@ class _RegisterPageState extends State<RegisterPage> {
       return await snapshot.ref.getDownloadURL();
     } catch (e) {
       debugPrint('Error subiendo imagen: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error subiendo imagen: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error subiendo imagen: $e')));
+      }
       return null;
     }
   }
 
   Future<void> _guardarVehiculo() async {
     if (_formKey.currentState!.validate()) {
-      // Validaciones adicionales de fechas requeridas
+      // Validaciones adicionales
       if (_fechaMatricula == null || _venceRTM == null || _venceSOAT == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -123,12 +133,13 @@ class _RegisterPageState extends State<RegisterPage> {
         // Subir fotos
         String? frenteUrl = await _uploadImage(_fotoFrente);
         String? traseraUrl = await _uploadImage(_fotoTrasera);
-        String? lateralUrl = await _uploadImage(_fotoLateral);
+        String? lateralDerUrl = await _uploadImage(_fotoLateralDerecho);
+        String? lateralIzqUrl = await _uploadImage(_fotoLateralIzquierdo);
 
         final nuevoVehiculo = Vehiculo(
-          id: '', // Firestore generará el ID
+          id: '',
           placa: _placaController.text.toUpperCase(),
-          empresa: _empresaController.text,
+          empresa: _empresaSeleccionada!, // Validado por FormField
           tipo: _tipoSeleccionado,
           fechaMatricula: _fechaMatricula!,
           venceRTM: _venceRTM!,
@@ -137,7 +148,8 @@ class _RegisterPageState extends State<RegisterPage> {
           venceExtintor: _venceExtintor,
           fotoFrenteUrl: frenteUrl,
           fotoTraseraUrl: traseraUrl,
-          fotoLateralUrl: lateralUrl,
+          fotoLateralDerechoUrl: lateralDerUrl,
+          fotoLateralIzquierdoUrl: lateralIzqUrl,
         );
 
         await FirebaseFirestore.instance
@@ -148,7 +160,7 @@ class _RegisterPageState extends State<RegisterPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Vehículo registrado con éxito')),
           );
-          Navigator.pop(context); // Volver al Dashboard
+          Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
@@ -162,7 +174,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  // Widget auxiliar para selección de fecha
   Widget _buildDateField(
     String label,
     DateTime? selectedDate,
@@ -182,6 +193,8 @@ class _RegisterPageState extends State<RegisterPage> {
             labelText: label,
             border: const OutlineInputBorder(),
             suffixIcon: const Icon(Icons.calendar_today),
+            filled: true,
+            fillColor: Colors.grey[50],
           ),
           child: Text(
             selectedDate == null
@@ -193,7 +206,6 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  // Widget auxiliar para selección de imagen
   Widget _buildImagePicker(String label, XFile? file, Function() onTap) {
     return Column(
       children: [
@@ -201,21 +213,23 @@ class _RegisterPageState extends State<RegisterPage> {
         const SizedBox(height: 8),
         InkWell(
           onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
           child: Container(
             height: 100,
             width: 100,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
+              border: Border.all(color: Colors.grey.shade400),
               borderRadius: BorderRadius.circular(8),
+              color: Colors.grey[100],
             ),
             child: file == null
                 ? const Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
-                : kIsWeb
-                ? Image.network(
-                    file.path,
-                    fit: BoxFit.cover,
-                  ) // Previsualización Web simple
-                : Image.file(File(file.path), fit: BoxFit.cover),
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: kIsWeb
+                        ? Image.network(file.path, fit: BoxFit.cover)
+                        : Image.file(File(file.path), fit: BoxFit.cover),
+                  ),
           ),
         ),
       ],
@@ -225,136 +239,235 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Registrar Vehículo')),
+      appBar: AppBar(
+        title: const Text('Registrar Vehículo'),
+        centerTitle: true,
+      ),
       body: _isUploading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Tipo de Vehículo
-                    Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<String>(
-                            title: const Text('Carro'),
-                            value: 'Carro',
-                            groupValue: _tipoSeleccionado,
-                            onChanged: (v) =>
-                                setState(() => _tipoSeleccionado = v!),
+          : Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 800),
+                padding: const EdgeInsets.all(24.0),
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // --- Sección 1: Información Básica ---
+                          const Text(
+                            'Información General',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<String>(
-                            title: const Text('Moto'),
-                            value: 'Moto',
-                            groupValue: _tipoSeleccionado,
-                            onChanged: (v) =>
-                                setState(() => _tipoSeleccionado = v!),
+                          const Divider(),
+                          const SizedBox(height: 16),
+
+                          Row(
+                            children: [
+                              Expanded(child: _buildRadioTile('Carro')),
+                              Expanded(child: _buildRadioTile('Moto')),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 16),
 
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _placaController,
-                      decoration: const InputDecoration(
-                        labelText: 'Placa',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _empresaController,
-                      decoration: const InputDecoration(
-                        labelText: 'Empresa',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
-                    ),
+                          // Fila: Placa y Empresa
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _placaController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Placa',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                  ),
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  validator: (v) =>
+                                      v!.isEmpty ? 'Requerido' : null,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: _empresaSeleccionada,
+                                  items: _empresas.map((e) {
+                                    return DropdownMenuItem(
+                                      value: e,
+                                      child: Text(e),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) => setState(
+                                    () => _empresaSeleccionada = val,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Empresa',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                  ),
+                                  validator: (v) => v == null
+                                      ? 'Selecciona una empresa'
+                                      : null,
+                                ),
+                              ),
+                            ],
+                          ),
 
-                    const SizedBox(height: 16),
-                    _buildDateField(
-                      'Fecha Matrícula',
-                      _fechaMatricula,
-                      (d) => setState(() => _fechaMatricula = d),
-                    ),
-                    _buildDateField(
-                      'Vence RTM',
-                      _venceRTM,
-                      (d) => setState(() => _venceRTM = d),
-                    ),
-                    _buildDateField(
-                      'Vence SOAT',
-                      _venceSOAT,
-                      (d) => setState(() => _venceSOAT = d),
-                    ),
+                          const SizedBox(height: 32),
 
-                    if (_tipoSeleccionado == 'Carro') ...[
-                      _buildDateField(
-                        'Vence Botiquín',
-                        _venceBotiquin,
-                        (d) => setState(() => _venceBotiquin = d),
-                      ),
-                      _buildDateField(
-                        'Vence Extintor',
-                        _venceExtintor,
-                        (d) => setState(() => _venceExtintor = d),
-                      ),
-                    ],
+                          // --- Sección 2: Fechas y Vencimientos ---
+                          const Text(
+                            'Vencimientos',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Divider(),
+                          const SizedBox(height: 16),
 
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Fotos del Vehículo',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildImagePicker(
-                          'Frente',
-                          _fotoFrente,
-                          () => _pickImage('frente'),
-                        ),
-                        _buildImagePicker(
-                          'Trasera',
-                          _fotoTrasera,
-                          () => _pickImage('trasera'),
-                        ),
-                        _buildImagePicker(
-                          'Lateral',
-                          _fotoLateral,
-                          () => _pickImage('lateral'),
-                        ),
-                      ],
-                    ),
+                          _buildDateField(
+                            'Fecha de Matrícula',
+                            _fechaMatricula,
+                            (d) => setState(() => _fechaMatricula = d),
+                          ),
 
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: _guardarVehiculo,
-                      child: const Text(
-                        'GUARDAR VEHÍCULO',
-                        style: TextStyle(fontSize: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDateField(
+                                  'Vence RTM',
+                                  _venceRTM,
+                                  (d) => setState(() => _venceRTM = d),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _buildDateField(
+                                  'Vence SOAT',
+                                  _venceSOAT,
+                                  (d) => setState(() => _venceSOAT = d),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          if (_tipoSeleccionado == 'Carro') ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildDateField(
+                                    'Vence Botiquín',
+                                    _venceBotiquin,
+                                    (d) => setState(() => _venceBotiquin = d),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: _buildDateField(
+                                    'Vence Extintor',
+                                    _venceExtintor,
+                                    (d) => setState(() => _venceExtintor = d),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          const SizedBox(height: 32),
+
+                          // --- Sección 3: Evidencia Fotográfica ---
+                          const Text(
+                            'Evidencia Fotográfica',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Divider(),
+                          const SizedBox(height: 16),
+
+                          Wrap(
+                            spacing: 20,
+                            runSpacing: 20,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              _buildImagePicker(
+                                'Frente',
+                                _fotoFrente,
+                                () => _pickImage('frente'),
+                              ),
+                              _buildImagePicker(
+                                'Trasera',
+                                _fotoTrasera,
+                                () => _pickImage('trasera'),
+                              ),
+                              _buildImagePicker(
+                                'Lat. Derecho',
+                                _fotoLateralDerecho,
+                                () => _pickImage('lateral_derecho'),
+                              ),
+                              _buildImagePicker(
+                                'Lat. Izquierdo',
+                                _fotoLateralIzquierdo,
+                                () => _pickImage('lateral_izquierdo'),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 40),
+                          Center(
+                            child: SizedBox(
+                              width: 250,
+                              height: 50,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blueAccent,
+                                  foregroundColor: Colors.white,
+                                  elevation: 5,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: _guardarVehiculo,
+                                child: const Text(
+                                  'GUARDAR VEHÍCULO',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildRadioTile(String value) {
+    return RadioListTile<String>(
+      title: Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+      value: value,
+      groupValue: _tipoSeleccionado,
+      activeColor: Colors.blueAccent,
+      onChanged: (v) => setState(() => _tipoSeleccionado = v!),
+      contentPadding: EdgeInsets.zero,
     );
   }
 }

@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+
+import os
+
+content = r'''import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -546,3 +549,7 @@ class VehiculoDataSource extends DataTableSource {
   @override
   int get selectedRowCount => 0;
 }
+'''
+
+with open(r'c:\Users\Cesar_R\dev\gestion_rtm_2026\lib\pages\dashboard_page.dart', 'w', encoding='utf-8') as f:
+    f.write(content)

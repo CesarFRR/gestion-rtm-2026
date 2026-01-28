@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Vehiculo {
   final String id;
@@ -14,7 +14,8 @@ class Vehiculo {
   // URLs de fotos
   final String? fotoFrenteUrl;
   final String? fotoTraseraUrl;
-  final String? fotoLateralUrl;
+  final String? fotoLateralDerechoUrl;
+  final String? fotoLateralIzquierdoUrl;
 
   Vehiculo({
     required this.id,
@@ -28,33 +29,9 @@ class Vehiculo {
     this.venceExtintor,
     this.fotoFrenteUrl,
     this.fotoTraseraUrl,
-    this.fotoLateralUrl,
+    this.fotoLateralDerechoUrl,
+    this.fotoLateralIzquierdoUrl,
   });
-
-  factory Vehiculo.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-
-    DateTime? toDateNullable(dynamic field) {
-      if (field == null) return null;
-      if (field is Timestamp) return field.toDate();
-      return null;
-    }
-
-    return Vehiculo(
-      id: doc.id,
-      placa: data['placa'] ?? '',
-      empresa: data['empresa'] ?? '',
-      tipo: data['tipo'] ?? 'Carro',
-      fechaMatricula: toDateNullable(data['fechaMatricula']),
-      venceRTM: toDateNullable(data['venceRTM']),
-      venceSOAT: toDateNullable(data['venceSOAT']),
-      venceBotiquin: toDateNullable(data['venceBotiquin']),
-      venceExtintor: toDateNullable(data['venceExtintor']),
-      fotoFrenteUrl: data['fotoFrenteUrl'],
-      fotoTraseraUrl: data['fotoTraseraUrl'],
-      fotoLateralUrl: data['fotoLateralUrl'],
-    );
-  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -68,30 +45,41 @@ class Vehiculo {
       'venceExtintor': venceExtintor != null ? Timestamp.fromDate(venceExtintor!) : null,
       'fotoFrenteUrl': fotoFrenteUrl,
       'fotoTraseraUrl': fotoTraseraUrl,
-      'fotoLateralUrl': fotoLateralUrl,
+      'fotoLateralDerechoUrl': fotoLateralDerechoUrl,
+      'fotoLateralIzquierdoUrl': fotoLateralIzquierdoUrl,
     };
   }
 
-  // Lógica de Alertas
-  bool get tieneAlertaRoja {
-    final now = DateTime.now();
-    final threshold = 10; // días
-
-    int diasPara(DateTime? fecha) {
-         if (fecha == null) return 999; // Si no hay fecha, no hay alerta
-         final fechaSinHora = DateTime(fecha.year, fecha.month, fecha.day);
-         final hoySinHora = DateTime(now.year, now.month, now.day);
-         return fechaSinHora.difference(hoySinHora).inDays;
+  factory Vehiculo.fromFirestore(QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    
+    DateTime? toDateTime(dynamic val) {
+      if (val is Timestamp) return val.toDate();
+      return null;
     }
 
-    // Si fecha es nula, diasPara devuelve 999 (> 10), así que no alerta.
-    // Si queremos alertar por falta de fecha, cambiar lógica.
-    // Asumiremos que null = no dato = no alerta roja (o cambiar si cliente pide)
-    
-    if (venceRTM != null && diasPara(venceRTM) < threshold) return true;
-    if (venceSOAT != null && diasPara(venceSOAT) < threshold) return true;
-    if (tipo == 'Carro' && venceExtintor != null && diasPara(venceExtintor) < threshold) return true;
-    
-    return false;
+    return Vehiculo(
+      id: doc.id,
+      placa: data['placa'] ?? '',
+      empresa: data['empresa'] ?? '',
+      tipo: data['tipo'] ?? 'Carro',
+      fechaMatricula: toDateTime(data['fechaMatricula']),
+      venceRTM: toDateTime(data['venceRTM']),
+      venceSOAT: toDateTime(data['venceSOAT']),
+      venceBotiquin: toDateTime(data['venceBotiquin']),
+      venceExtintor: toDateTime(data['venceExtintor']),
+      fotoFrenteUrl: data['fotoFrenteUrl'],
+      fotoTraseraUrl: data['fotoTraseraUrl'],
+      fotoLateralDerechoUrl: data['fotoLateralDerechoUrl'],
+      fotoLateralIzquierdoUrl: data['fotoLateralIzquierdoUrl'],
+    );
+  }
+
+  // Lógica de negocio (Getters)
+  
+  bool get tieneAlertaRoja {
+    if (venceRTM == null) return false;
+    final dias = venceRTM!.difference(DateTime.now()).inDays;
+    return dias < 10;
   }
 }
