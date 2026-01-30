@@ -1,12 +1,13 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+// import 'package:firebase_storage/firebase_storage.dart'; // REMOVED
 import 'package:flutter/foundation.dart'; // Para kIsWeb
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../models/vehiculo_model.dart';
+import '../services/cloudinary_service.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -36,7 +37,7 @@ class _RegisterPageState extends State<RegisterPage> {
   DateTime? _venceSOAT;
   DateTime? _venceBotiquin;
   DateTime? _venceExtintor;
-
+  DateTime? _venceTodoRiesgo;
   // Archivos de imagen (XFile soporta web y móvil)
   XFile? _fotoFrente;
   XFile? _fotoTrasera;
@@ -75,28 +76,30 @@ class _RegisterPageState extends State<RegisterPage> {
     if (file == null) return null;
 
     try {
-      // Usar bytes para compatibilidad Web/Móvil
-      Uint8List fileBytes = await file.readAsBytes();
-      String fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-
-      Reference ref = FirebaseStorage.instance.ref().child(
-        'vehiculos/$fileName',
+      final url = await CloudinaryService.uploadImage(
+        file,
+        _placaController.text.toUpperCase(),
+        file == _fotoFrente
+            ? 'frente'
+            : file == _fotoTrasera
+            ? 'trasera'
+            : file == _fotoLateralDerecho
+            ? 'lateral_derecho'
+            : 'lateral_izquierdo',
       );
 
-      SettableMetadata metadata = SettableMetadata(contentType: file.mimeType);
-
-      UploadTask task = ref.putData(fileBytes, metadata);
-
-      TaskSnapshot snapshot = await task;
-      return await snapshot.ref.getDownloadURL();
-    } catch (e) {
-      debugPrint('Error subiendo imagen: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error subiendo imagen: $e')));
+      // Si CloudinaryService retorna null (fallo controlado), lanzamos excepci?n
+      // para que _guardarVehiculo detenga el proceso.
+      if (url == null) {
+        throw Exception('Error al subir imagen a Cloudinary (URL vac?a)');
       }
-      return null;
+      return url;
+    } catch (e) {
+      // Si ocurre cualquier error (excepci?n o error controlado arriba),
+      // lo relanzamos (rethrow) para que el try-catch de _guardarVehiculo
+      // capture el fallo y NO guarde nada en Firestore.
+      debugPrint('Fallo cr?tico en subida de imagen: $e');
+      rethrow;
     }
   }
 
@@ -115,7 +118,9 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
       if (_tipoSeleccionado == 'Carro') {
-        if (_venceBotiquin == null || _venceExtintor == null) {
+        if (_venceBotiquin == null ||
+            _venceExtintor == null ||
+            _venceTodoRiesgo == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -146,6 +151,7 @@ class _RegisterPageState extends State<RegisterPage> {
           venceSOAT: _venceSOAT!,
           venceBotiquin: _venceBotiquin,
           venceExtintor: _venceExtintor,
+          venceTodoRiesgo: _venceTodoRiesgo,
           fotoFrenteUrl: frenteUrl,
           fotoTraseraUrl: traseraUrl,
           fotoLateralDerechoUrl: lateralDerUrl,
@@ -154,7 +160,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
         await FirebaseFirestore.instance
             .collection('vehiculos')
-            .add(nuevoVehiculo.toMap());
+            .doc(nuevoVehiculo.placa)
+            .set(nuevoVehiculo.toMap());
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -377,6 +384,14 @@ class _RegisterPageState extends State<RegisterPage> {
                                     'Vence Extintor',
                                     _venceExtintor,
                                     (d) => setState(() => _venceExtintor = d),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: _buildDateField(
+                                    'Vence Todo Riesgo',
+                                    _venceTodoRiesgo,
+                                    (d) => setState(() => _venceTodoRiesgo = d),
                                   ),
                                 ),
                               ],

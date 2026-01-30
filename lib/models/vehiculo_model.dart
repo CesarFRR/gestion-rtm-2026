@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Vehiculo {
   final String id;
@@ -8,9 +8,10 @@ class Vehiculo {
   final DateTime? fechaMatricula;
   final DateTime? venceRTM;
   final DateTime? venceSOAT;
+  final DateTime? venceTodoRiesgo; // Nuevo campo agregado
   final DateTime? venceBotiquin; // Puede ser nulo si es Moto
   final DateTime? venceExtintor; // Puede ser nulo si es Moto
-  
+
   // URLs de fotos
   final String? fotoFrenteUrl;
   final String? fotoTraseraUrl;
@@ -25,6 +26,7 @@ class Vehiculo {
     required this.fechaMatricula,
     required this.venceRTM,
     required this.venceSOAT,
+    this.venceTodoRiesgo,
     this.venceBotiquin,
     this.venceExtintor,
     this.fotoFrenteUrl,
@@ -38,11 +40,20 @@ class Vehiculo {
       'placa': placa,
       'empresa': empresa,
       'tipo': tipo,
-      'fechaMatricula': fechaMatricula != null ? Timestamp.fromDate(fechaMatricula!) : null,
+      'fechaMatricula': fechaMatricula != null
+          ? Timestamp.fromDate(fechaMatricula!)
+          : null,
       'venceRTM': venceRTM != null ? Timestamp.fromDate(venceRTM!) : null,
       'venceSOAT': venceSOAT != null ? Timestamp.fromDate(venceSOAT!) : null,
-      'venceBotiquin': venceBotiquin != null ? Timestamp.fromDate(venceBotiquin!) : null,
-      'venceExtintor': venceExtintor != null ? Timestamp.fromDate(venceExtintor!) : null,
+      'venceTodoRiesgo': venceTodoRiesgo != null
+          ? Timestamp.fromDate(venceTodoRiesgo!)
+          : null,
+      'venceBotiquin': venceBotiquin != null
+          ? Timestamp.fromDate(venceBotiquin!)
+          : null,
+      'venceExtintor': venceExtintor != null
+          ? Timestamp.fromDate(venceExtintor!)
+          : null,
       'fotoFrenteUrl': fotoFrenteUrl,
       'fotoTraseraUrl': fotoTraseraUrl,
       'fotoLateralDerechoUrl': fotoLateralDerechoUrl,
@@ -52,7 +63,7 @@ class Vehiculo {
 
   factory Vehiculo.fromFirestore(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    
+
     DateTime? toDateTime(dynamic val) {
       if (val is Timestamp) return val.toDate();
       return null;
@@ -66,6 +77,7 @@ class Vehiculo {
       fechaMatricula: toDateTime(data['fechaMatricula']),
       venceRTM: toDateTime(data['venceRTM']),
       venceSOAT: toDateTime(data['venceSOAT']),
+      venceTodoRiesgo: toDateTime(data['venceTodoRiesgo']),
       venceBotiquin: toDateTime(data['venceBotiquin']),
       venceExtintor: toDateTime(data['venceExtintor']),
       fotoFrenteUrl: data['fotoFrenteUrl'],
@@ -76,7 +88,7 @@ class Vehiculo {
   }
 
   // Lógica de negocio (Getters)
-  
+
   bool get tieneAlertaRoja {
     if (venceRTM == null) return false;
     final dias = venceRTM!.difference(DateTime.now()).inDays;
