@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/vehiculo_model.dart';
 import '../pages/vehiculo_page.dart'; // Importamos la p?gina de detalle
+import '../pages/edit_vehiculo_page.dart'; // Importamos la p?gina de edici?n
 
 class VehiculosTable extends StatefulWidget {
   final List<Vehiculo> vehiculos;
@@ -29,7 +30,7 @@ class _VehiculosTableState extends State<VehiculosTable> {
       child: Theme(
         data: Theme.of(context).copyWith(
           cardColor: Colors.white,
-          dividerColor: Colors.grey.withOpacity(0.2),
+          dividerColor: Colors.grey.withValues(alpha: 50),
         ),
         child: SingleChildScrollView(
           child: PaginatedDataTable(
@@ -156,6 +157,13 @@ class VehiculoDataSource extends DataTableSource {
       );
     }
 
+    void navigateToEdit() {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => EditVehiculoPage(vehiculo: vehiculo)),
+      );
+    }
+
     return DataRow.byIndex(
       index: index,
       cells: [
@@ -198,23 +206,16 @@ class VehiculoDataSource extends DataTableSource {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: vehiculo.tipo == 'Carro'
-                  ? Colors.blue.withOpacity(0.1)
-                  : Colors.green.withOpacity(0.1),
+                  ? Colors.blue.withValues(alpha: 200)
+                  : Colors.green.withValues(alpha: 200),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: vehiculo.tipo == 'Carro'
-                    ? Colors.blue.withOpacity(0.3)
-                    : Colors.green.withOpacity(0.3),
-              ),
             ),
             child: Text(
               vehiculo.tipo,
-              style: TextStyle(
+              style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
-                color: vehiculo.tipo == 'Carro'
-                    ? Colors.blue[800]
-                    : Colors.green[800],
+                color: Colors.black87, // Letra blanca para mejor contraste
               ),
             ),
           ),
@@ -226,7 +227,7 @@ class VehiculoDataSource extends DataTableSource {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: rtmCritico
                 ? BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 10),
                     borderRadius: BorderRadius.circular(4),
                   )
                 : null,
@@ -261,11 +262,7 @@ class VehiculoDataSource extends DataTableSource {
                 icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent),
                 tooltip: 'Editar',
                 splashRadius: 20,
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Editar ${vehiculo.placa}')),
-                  );
-                },
+                onPressed: navigateToEdit,
               ),
             ],
           ),

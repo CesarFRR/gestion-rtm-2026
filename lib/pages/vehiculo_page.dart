@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/vehiculo_model.dart';
+import 'edit_vehiculo_page.dart';
 
 class VehiculoPage extends StatelessWidget {
   final Vehiculo vehiculo;
@@ -9,6 +10,13 @@ class VehiculoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void navigateToEdit() {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => EditVehiculoPage(vehiculo: vehiculo)),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Detalle de ${vehiculo.placa}'),
@@ -23,6 +31,11 @@ class VehiculoPage extends StatelessWidget {
             _buildVencimientosCard(),
             const SizedBox(height: 16),
             _buildFotosCard(context),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: navigateToEdit,
+              child: const Text('Editar'),
+            ),
           ],
         ),
       ),
@@ -182,13 +195,13 @@ class VehiculoPage extends StatelessWidget {
     final now = DateTime.now();
     final diasRestantes = date.difference(now).inDays;
     Color color = Colors.black;
-    if (diasRestantes < 0)
+    if (diasRestantes < 0) {
       color = Colors.red;
-    else if (diasRestantes < 30)
+    } else if (diasRestantes < 30) {
       color = Colors.orange;
-    else
+    } else {
       color = Colors.green;
-
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -212,8 +225,9 @@ class VehiculoPage extends StatelessWidget {
 
   Widget _buildStatusIcon(int days) {
     if (days < 0) return const Icon(Icons.error, color: Colors.red, size: 16);
-    if (days < 30)
+    if (days < 30) {
       return const Icon(Icons.warning, color: Colors.orange, size: 16);
+    }
     return const Icon(Icons.check_circle, color: Colors.green, size: 16);
   }
 

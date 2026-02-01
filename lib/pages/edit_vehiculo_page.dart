@@ -9,18 +9,19 @@ import 'package:intl/intl.dart';
 import '../models/vehiculo_model.dart';
 import '../services/cloudinary_service.dart';
 
-class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+class EditVehiculoPage extends StatefulWidget {
+  final Vehiculo vehiculo;
+  const EditVehiculoPage({super.key, required this.vehiculo});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  State<EditVehiculoPage> createState() => _EditVehiculoPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
+class _EditVehiculoPageState extends State<EditVehiculoPage> {
   final _formKey = GlobalKey<FormState>();
 
   // Controladores
-  final TextEditingController _placaController = TextEditingController();
+  late TextEditingController _placaController;
 
   // Dropdown empresas
   final List<String> _empresas = [
@@ -30,7 +31,7 @@ class _RegisterPageState extends State<RegisterPage> {
   ];
   String? _empresaSeleccionada;
 
-  String _tipoSeleccionado = 'Carro'; // Por defecto
+  late String _tipoSeleccionado;
 
   DateTime? _fechaMatricula;
   DateTime? _venceRTM;
@@ -38,7 +39,8 @@ class _RegisterPageState extends State<RegisterPage> {
   DateTime? _venceBotiquin;
   DateTime? _venceExtintor;
   DateTime? _venceTodoRiesgo;
-  // Archivos de imagen (XFile soporta web y móvil)
+
+  // Archivos de imagen NUEVOS
   XFile? _fotoFrente;
   XFile? _fotoTrasera;
   XFile? _fotoLateralDerecho;
@@ -46,6 +48,27 @@ class _RegisterPageState extends State<RegisterPage> {
 
   bool _isUploading = false;
   final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicializar con los datos del vehículo
+    _placaController = TextEditingController(text: widget.vehiculo.placa);
+    _empresaSeleccionada = widget.vehiculo.empresa;
+    _tipoSeleccionado = widget.vehiculo.tipo;
+    _fechaMatricula = widget.vehiculo.fechaMatricula;
+    _venceRTM = widget.vehiculo.venceRTM;
+    _venceSOAT = widget.vehiculo.venceSOAT;
+    _venceBotiquin = widget.vehiculo.venceBotiquin;
+    _venceExtintor = widget.vehiculo.venceExtintor;
+    _venceTodoRiesgo = widget.vehiculo.venceTodoRiesgo;
+  }
+
+  @override
+  void dispose() {
+    _placaController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickImage(String section) async {
     // Mostrar selector de fuente (Cámara o Galería)
@@ -158,34 +181,36 @@ class _RegisterPageState extends State<RegisterPage> {
         return;
       }
 
-      if (_tipoSeleccionado == 'Carro') {
-        if (_venceBotiquin == null ||
-            _venceExtintor == null ||
-            _venceTodoRiesgo == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Para Carros, Botiquín y Extintor son obligatorios.',
-              ),
-            ),
-          );
-          return;
-        }
-      }
-
       setState(() => _isUploading = true);
 
       try {
-        // Subir fotos
-        String? frenteUrl = await _uploadImage(_fotoFrente);
-        String? traseraUrl = await _uploadImage(_fotoTrasera);
-        String? lateralDerUrl = await _uploadImage(_fotoLateralDerecho);
-        String? lateralIzqUrl = await _uploadImage(_fotoLateralIzquierdo);
+        // 1. Guardar referencia a las URLs antiguas antes de reemplazarlas
+        final String? oldFrente = widget.vehiculo.fotoFrenteUrl;
+        final String? oldTrasera = widget.vehiculo.fotoTraseraUrl;
+        final String? oldLatDer = widget.vehiculo.fotoLateralDerechoUrl;
+        final String? oldLatIzq = widget.vehiculo.fotoLateralIzquierdoUrl;
 
-        final nuevoVehiculo = Vehiculo(
-          id: '',
+        // 2. Subir fotos nuevas (si existen)
+        String? frenteUrl = _fotoFrente != null
+            ? await _uploadImage(_fotoFrente)
+            : oldFrente;
+
+        String? traseraUrl = _fotoTrasera != null
+            ? await _uploadImage(_fotoTrasera)
+            : oldTrasera;
+
+        String? lateralDerUrl = _fotoLateralDerecho != null
+            ? await _uploadImage(_fotoLateralDerecho)
+            : oldLatDer;
+
+        String? lateralIzqUrl = _fotoLateralIzquierdo != null
+            ? await _uploadImage(_fotoLateralIzquierdo)
+            : oldLatIzq;
+
+        final vehiculoEditado = Vehiculo(
+          id: widget.vehiculo.id,
           placa: _placaController.text.toUpperCase(),
-          empresa: _empresaSeleccionada!, // Validado por FormField
+          empresa: _empresaSeleccionada!,
           tipo: _tipoSeleccionado,
           fechaMatricula: _fechaMatricula!,
           venceRTM: _venceRTM!,
@@ -199,14 +224,38 @@ class _RegisterPageState extends State<RegisterPage> {
           fotoLateralIzquierdoUrl: lateralIzqUrl,
         );
 
+        // 3. Actualizar Firestore
+        // Si la placa cambió, borramos el documento viejo
+        if (_placaController.text.toUpperCase() != widget.vehiculo.placa) {
+          await FirebaseFirestore.instance
+              .collection('vehiculos')
+              .doc(widget.vehiculo.placa)
+              .delete();
+        }
+
         await FirebaseFirestore.instance
             .collection('vehiculos')
-            .doc(nuevoVehiculo.placa)
-            .set(nuevoVehiculo.toMap());
+            .doc(vehiculoEditado.placa)
+            .set(vehiculoEditado.toMap());
+
+        // 4. SOLO SI FIRESTORE TUVO ÉXITO: Intentar borrar las imágenes viejas de Cloudinary
+        // Solo si fueron reemplazadas por algo nuevo
+        if (_fotoFrente != null && oldFrente != null) {
+          CloudinaryService.deleteImage(oldFrente);
+        }
+        if (_fotoTrasera != null && oldTrasera != null) {
+          CloudinaryService.deleteImage(oldTrasera);
+        }
+        if (_fotoLateralDerecho != null && oldLatDer != null) {
+          CloudinaryService.deleteImage(oldLatDer);
+        }
+        if (_fotoLateralIzquierdo != null && oldLatIzq != null) {
+          CloudinaryService.deleteImage(oldLatIzq);
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Vehículo registrado con éxito')),
+            const SnackBar(content: Text('Vehículo actualizado con éxito')),
           );
           Navigator.pop(context);
         }
@@ -214,7 +263,7 @@ class _RegisterPageState extends State<RegisterPage> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
+          ).showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
         }
       } finally {
         if (mounted) setState(() => _isUploading = false);
@@ -254,7 +303,12 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Widget _buildImagePicker(String label, XFile? file, Function() onTap) {
+  Widget _buildImagePicker(
+    String label,
+    XFile? file,
+    String? networkUrl,
+    Function() onTap,
+  ) {
     return Column(
       children: [
         Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -270,14 +324,19 @@ class _RegisterPageState extends State<RegisterPage> {
               borderRadius: BorderRadius.circular(8),
               color: Colors.grey[100],
             ),
-            child: file == null
-                ? const Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
-                : ClipRRect(
+            child: file != null
+                ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: kIsWeb
                         ? Image.network(file.path, fit: BoxFit.cover)
                         : Image.file(File(file.path), fit: BoxFit.cover),
-                  ),
+                  )
+                : networkUrl != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(networkUrl, fit: BoxFit.cover),
+                  )
+                : const Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
           ),
         ),
       ],
@@ -288,10 +347,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: false, // Manejo manual para suavidad extrema
-      appBar: AppBar(
-        title: const Text('Registrar Vehículo'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Editar Vehículo'), centerTitle: true),
       body: SafeArea(
         child: _isUploading
             ? const Center(child: CircularProgressIndicator())
@@ -349,7 +405,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ),
                                   const SizedBox(height: 16),
                                   DropdownButtonFormField<String>(
-                                    initialValue: _empresaSeleccionada,
+                                    value: _empresaSeleccionada,
                                     isExpanded:
                                         true, // Importante para evitar overflow en dropdown
                                     items: _empresas.map((e) {
@@ -397,7 +453,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                   const SizedBox(width: 16),
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      initialValue: _empresaSeleccionada,
+                                      value: _empresaSeleccionada,
                                       isExpanded: true,
                                       items: _empresas.map((e) {
                                         return DropdownMenuItem(
@@ -540,21 +596,25 @@ class _RegisterPageState extends State<RegisterPage> {
                                 _buildImagePicker(
                                   'Frente',
                                   _fotoFrente,
+                                  widget.vehiculo.fotoFrenteUrl,
                                   () => _pickImage('frente'),
                                 ),
                                 _buildImagePicker(
                                   'Trasera',
                                   _fotoTrasera,
+                                  widget.vehiculo.fotoTraseraUrl,
                                   () => _pickImage('trasera'),
                                 ),
                                 _buildImagePicker(
                                   'Lat. Derecho',
                                   _fotoLateralDerecho,
+                                  widget.vehiculo.fotoLateralDerechoUrl,
                                   () => _pickImage('lateral_derecho'),
                                 ),
                                 _buildImagePicker(
                                   'Lat. Izquierdo',
                                   _fotoLateralIzquierdo,
+                                  widget.vehiculo.fotoLateralIzquierdoUrl,
                                   () => _pickImage('lateral_izquierdo'),
                                 ),
                               ],
@@ -576,7 +636,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ),
                                   onPressed: _guardarVehiculo,
                                   child: const Text(
-                                    'GUARDAR VEHÍCULO',
+                                    'ACTUALIZAR VEHÍCULO',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
